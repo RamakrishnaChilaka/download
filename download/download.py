@@ -27,7 +27,7 @@ remote_file_size_default = 1
 
 
 def download(
-    url, path, kind="file", progressbar=True, replace=False, timeout=10.0, verbose=True
+    url, path, kind="file", progressbar=True, replace=False, timeout=10.0, verbose=True, headers={}
 ):
     """Download a URL.
 
@@ -67,13 +67,15 @@ def download(
         a zip file).
     """
     if kind not in ALLOWED_KINDS:
-        raise ValueError("`kind` must be one of {}, got {}".format(ALLOWED_KINDS, kind))
+        raise ValueError(
+            "`kind` must be one of {}, got {}".format(ALLOWED_KINDS, kind))
 
     # Make sure we have directories to dump files
     path = op.expanduser(path)
 
     if len(path) == 0:
-        raise ValueError("You must specify a path. For current directory use .")
+        raise ValueError(
+            "You must specify a path. For current directory use .")
 
     download_url = _convert_url_to_downloadable(url)
 
@@ -98,6 +100,7 @@ def download(
             timeout=timeout,
             verbose=verbose,
             progressbar=progressbar,
+            headers=headers,
         )
 
         # Unzip the file to the out path
@@ -122,6 +125,7 @@ def download(
             timeout=timeout,
             verbose=verbose,
             progressbar=progressbar,
+            headers=headers,
         )
         msg = "Successfully downloaded file to {}".format(path)
     if verbose:
@@ -148,13 +152,14 @@ def _convert_url_to_downloadable(url):
 
 
 def _fetch_file(
-    url,
-    file_name,
-    resume=True,
-    hash_=None,
-    timeout=10.0,
-    progressbar=True,
-    verbose=True,
+        url,
+        file_name,
+        resume=True,
+        hash_=None,
+        timeout=10.0,
+        progressbar=True,
+        verbose=True,
+        headers={}
 ):
     """Load requested file, downloading it if needed or requested.
 
@@ -179,7 +184,8 @@ def _fetch_file(
     # https://martinos.org/mne
     if hash_ is not None and (not isinstance(hash_, string_types) or len(hash_) != 32):
         raise ValueError(
-            "Bad hash value given, should be a 32-character " "string:\n%s" % (hash_,)
+            "Bad hash value given, should be a 32-character " "string:\n%s" % (
+                hash_,)
         )
     temp_file_name = file_name + ".part"
 
@@ -204,12 +210,12 @@ def _fetch_file(
                         ff.write(chunk)
         else:
             # Check file size and displaying it alongside the download url
-            req = request_agent(url)
+            req = request_agent(url, headers=headers)
             u = urllib.request.urlopen(req, timeout=timeout)
             u.close()
             # this is necessary to follow any redirects
             url = u.geturl()
-            req = request_agent(url)
+            req = request_agent(url, headers=headers)
             u = urllib.request.urlopen(req, timeout=timeout)
             try:
                 remote_file_size = int(
@@ -252,6 +258,7 @@ def _fetch_file(
                 verbose,
                 progressbar,
                 ncols=80,
+                headers=headers
             )
 
             # check md5sum
@@ -281,7 +288,7 @@ def _fetch_file(
 
 
 def _get_ftp(
-    url, temp_file_name, initial_size, file_size, verbose_bool, progressbar, ncols=80
+    url, temp_file_name, initial_size, file_size, verbose_bool, progressbar, ncols=80, headers={}
 ):
     """Safely (resume a) download to a file from FTP."""
     # Adapted from: https://pypi.python.org/pypi/fileDownloader.py
@@ -305,15 +312,15 @@ def _get_ftp(
     down_cmd = "RETR " + file_name
     assert file_size == data.size(file_name)
     with tqdm(
-            total=file_size,
-            initial=initial_size,
-            desc="file_sizes",
-            ncols=ncols,
-            unit="B",
-            unit_scale=True,
-            file=sys.stdout,
-            disable=not progressbar
-        ) as progress:
+        total=file_size,
+        initial=initial_size,
+        desc="file_sizes",
+        ncols=ncols,
+        unit="B",
+        unit_scale=True,
+        file=sys.stdout,
+        disable=not progressbar
+    ) as progress:
         # Callback lambda function that will be passed the downloaded data
         # chunk and will write it to file and update the progress bar
         mode = "ab" if initial_size > 0 else "wb"
@@ -327,11 +334,11 @@ def _get_ftp(
 
 
 def _get_http(
-    url, temp_file_name, initial_size, file_size, verbose_bool, progressbar, ncols=80
+    url, temp_file_name, initial_size, file_size, verbose_bool, progressbar, ncols=80, headers={}
 ):
     """Safely (resume a) download to a file from http(s)."""
     # Actually do the reading
-    req = request_agent(url)
+    req = request_agent(url, headers=headers)
     if initial_size > 0:
         req.headers["Range"] = "bytes=%s-" % (initial_size,)
     try:
@@ -349,7 +356,8 @@ def _get_http(
         del req.headers["Range"]
         response = urllib.request.urlopen(req)
     total_size = int(
-        response.headers.get("Content-Length", str(remote_file_size_default)).strip()
+        response.headers.get(
+            "Content-Length", str(remote_file_size_default)).strip()
     )
     if initial_size > 0 and file_size == total_size:
         tqdm.write(
@@ -364,15 +372,15 @@ def _get_http(
         raise RuntimeError("URL could not be parsed properly")
     mode = "ab" if initial_size > 0 else "wb"
     with tqdm(
-            total=total_size,
-            initial=initial_size,
-            desc="file_sizes",
-            ncols=ncols,
-            unit="B",
-            unit_scale=True,
-            file=sys.stdout,
-            disable=not progressbar
-        ) as progress:
+        total=total_size,
+        initial=initial_size,
+        desc="file_sizes",
+        ncols=ncols,
+        unit="B",
+        unit_scale=True,
+        file=sys.stdout,
+        disable=not progressbar
+    ) as progress:
 
         chunk_size = 8192  # 2 ** 13
         with open(temp_file_name, mode) as local_file:
@@ -463,7 +471,8 @@ class _TempDir(str):
     """
 
     def __new__(self):  # noqa: D105
-        new = str.__new__(self, tempfile.mkdtemp(prefix="tmp_download_tempdir_"))
+        new = str.__new__(self, tempfile.mkdtemp(
+            prefix="tmp_download_tempdir_"))
         return new
 
     def __init__(self):  # noqa: D102
@@ -473,13 +482,13 @@ class _TempDir(str):
         shutil.rmtree(self._path, ignore_errors=True)
 
 
-def request_agent(url):
+def request_agent(url, headers):
     req = urllib.request.Request(
         url,
         data=None,
         # Simulate a user-agent because some websites require it for this to work
         headers={
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36"
-        },
+        }.update(headers),
     )
     return req
