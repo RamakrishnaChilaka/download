@@ -482,13 +482,18 @@ class _TempDir(str):
         shutil.rmtree(self._path, ignore_errors=True)
 
 
+def Merge(dict1, dict2):
+    res = {**dict1, **dict2}
+    return res
+
+
 def request_agent(url, headers):
     req = urllib.request.Request(
         url,
         data=None,
         # Simulate a user-agent because some websites require it for this to work
-        headers={
+        headers=Merge({
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36"
-        }.update(headers),
+        }, headers),
     )
     return req
